@@ -1,18 +1,8 @@
-import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
+// This app uses custom session-based auth, NOT Supabase OAuth.
+// This route is kept for compatibility but simply redirects to login.
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = request.nextUrl
-  const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/dashboard'
-
-  if (code) {
-    const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) {
-      return NextResponse.redirect(`${origin}${next}`)
-    }
-  }
-
-  return NextResponse.redirect(`${origin}/auth/error`)
+  const { origin } = request.nextUrl
+  return NextResponse.redirect(`${origin}/login`)
 }
