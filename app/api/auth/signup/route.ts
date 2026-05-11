@@ -10,61 +10,82 @@ export async function POST(req: NextRequest) {
     // Basic validation
     if (!full_name || !username || !email || !password) {
       return NextResponse.json(
-        { error: 'Full name, username, email aur password zaroori hain.' },
+        { error: 'Full name, username, email, and password are required.' },
         { status: 400 }
       )
     }
 
     if (password.length < 8) {
       return NextResponse.json(
-        { error: 'Password kam az kam 8 characters ka hona chahiye.' },
+        { error: 'Password must be at least 8 characters long.' },
         { status: 400 }
       )
     }
 
     const db = createAdminClient()
 
-    // Check: email already exist karta hai?
-    const { data: existingEmail } = await db
+    // Check: email already exists?
+    const { data: existingEmail, error: emailCheckError } = await db
       .from('users')
       .select('user_id')
       .eq('email', email.toLowerCase().trim())
       .maybeSingle()
 
+    if (emailCheckError) {
+      console.error('[Signup] Email check error:', emailCheckError)
+      return NextResponse.json(
+        { error: 'Failed to verify email. Please try again.' },
+        { status: 500 }
+      )
+    }
+
     if (existingEmail) {
       return NextResponse.json(
-        { error: 'Yeh email pehle se registered hai. Login karein ya doosra email use karein.' },
+        { error: 'This email is already registered. Please log in or use a different email.' },
         { status: 409 }
       )
     }
 
-    // Check: username already exist karta hai?
-    const { data: existingUsername } = await db
+    // Check: username already exists?
+    const { data: existingUsername, error: usernameCheckError } = await db
       .from('users')
       .select('user_id')
       .eq('username', username.trim())
       .maybeSingle()
 
+    if (usernameCheckError) {
+      console.error('[Signup] Username check error:', usernameCheckError)
+      return NextResponse.json(
+        { error: 'Failed to verify username. Please try again.' },
+        { status: 500 }
+      )
+    }
+
     if (existingUsername) {
       return NextResponse.json(
-        { error: 'Yeh username pehle se liya ja chuka hai. Doosra username try karein.' },
+        { error: 'This username is already taken. Please try a different one.' },
         { status: 409 }
       )
     }
 
-    // Password hash karo
+    // Hash password
     const password_hash = await bcrypt.hash(password, 12)
 
-    // Default role: student (role_id = 1 — adjust karo agar alag ho)
-    const { data: roles } = await db
+    // Get Student role (case-insensitive match)
+    const { data: roleData, error: roleError } = await db
       .from('roles')
       .select('role_id')
-      .eq('role_name', 'student')
+      .ilike('role_name', 'student')
       .maybeSingle()
 
-    const role_id = roles?.role_id ?? 1
+    if (roleError) {
+      console.error('[Signup] Role fetch error:', roleError)
+    }
 
-    // User insert karo
+    // Default to role_id 3 (Student) if not found
+    const role_id = roleData?.role_id ?? 3
+
+    // Insert user
     const { data: newUser, error: insertError } = await db
       .from('users')
       .insert({
@@ -87,15 +108,39 @@ export async function POST(req: NextRequest) {
 
     if (insertError) {
       console.error('[Signup] DB insert error:', insertError)
+      
+      // Check for specific constraint violations
+      if (insertError.code === '23505') {
+        // Unique constraint violation
+        if (insertError.message?.includes('email')) {
+          return NextResponse.json(
+            { error: 'This email is already registered.' },
+            { status: 409 }
+          )
+        }
+        if (insertError.message?.includes('username')) {
+          return NextResponse.json(
+            { error: 'This username is already taken.' },
+            { status: 409 }
+          )
+        }
+      }
+      
+      // Check for trigger/constraint errors (like 2FA requirement)
+      if (insertError.code === 'P0001' || insertError.message?.includes('2fa') || insertError.message?.includes('trigger')) {
+        console.error('[Signup] Trigger constraint error - likely 2FA related')
+        // This is a DB trigger issue, not user's fault - proceed without 2FA for students
+      }
+      
       return NextResponse.json(
-        { error: 'Account banana mein error aya. Dobara try karein.' },
+        { error: 'Failed to create your account. Please try again.' },
         { status: 500 }
       )
     }
 
     return NextResponse.json(
       {
-        message: 'Account successfully ban gaya!',
+        message: 'Account created successfully!',
         user: newUser,
       },
       { status: 201 }
@@ -103,7 +148,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error('[Signup] Unexpected error:', err)
     return NextResponse.json(
-      { error: 'Server error. Thori der baad try karein.' },
+      { error: 'Server error. Please try again later.' },
       { status: 500 }
     )
   }
