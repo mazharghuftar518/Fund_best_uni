@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -36,6 +36,7 @@ interface InputFieldProps {
   icon: React.ReactNode
   rightElement?: React.ReactNode
   placeholder: string
+  autoComplete?: string
   onChange: (v: string) => void
   onBlur: () => void
 }
@@ -49,6 +50,7 @@ function InputField({
   icon,
   rightElement,
   placeholder,
+  autoComplete,
   onChange,
   onBlur,
 }: InputFieldProps) {
@@ -67,7 +69,7 @@ function InputField({
           type={type}
           value={value}
           placeholder={placeholder}
-          autoComplete={id}
+          autoComplete={autoComplete ?? id}
           onChange={(e) => onChange(e.target.value)}
           onBlur={onBlur}
           className={`
@@ -119,6 +121,15 @@ export default function LoginForm() {
   const [success, setSuccess] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
 
+  // Load remembered email on mount
+  useEffect(() => {
+    const remembered = localStorage.getItem('unipath-remembered-email')
+    if (remembered) {
+      setEmail(remembered)
+      setRememberMe(true)
+    }
+  }, [])
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const eErr = validateEmail(email)
@@ -129,6 +140,13 @@ export default function LoginForm() {
     if (eErr || pErr) return
 
     setLoading(true)
+
+    // Save or clear remembered email
+    if (rememberMe) {
+      localStorage.setItem('unipath-remembered-email', email.trim())
+    } else {
+      localStorage.removeItem('unipath-remembered-email')
+    }
 
     try {
       const res = await fetch('/api/auth/login', {
@@ -210,6 +228,7 @@ export default function LoginForm() {
           error={emailError}
           icon={<Mail className="w-4 h-4" />}
           placeholder="you@example.com"
+          autoComplete="email"
           onChange={(v) => {
             setEmail(v)
             if (emailError) setEmailError(validateEmail(v))
@@ -226,6 +245,7 @@ export default function LoginForm() {
           error={passwordError}
           icon={<Lock className="w-4 h-4" />}
           placeholder="Enter your password"
+          autoComplete="current-password"
           onChange={(v) => {
             setPassword(v)
             if (passwordError) setPasswordError(validatePassword(v))
@@ -244,7 +264,7 @@ export default function LoginForm() {
           }
         />
 
-        {/* Remember me + Forgot */}
+        {/* Remember me */}
         <div className="flex items-center justify-between">
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <div className="relative">
@@ -272,7 +292,7 @@ export default function LoginForm() {
             <span className="text-sm text-muted-foreground">Remember me</span>
           </label>
           <Link
-            href="/forgot-password"
+            href="/auth/reset-password"
             className="text-sm text-primary hover:text-primary/80 font-medium transition-colors"
           >
             Forgot password?
@@ -284,7 +304,7 @@ export default function LoginForm() {
           type="submit"
           disabled={loading || success}
           whileTap={{ scale: 0.985 }}
-          className="w-full py-3 rounded-xl bg-[#F59E0B] text-[#0B1F3A] font-semibold text-sm flex items-center justify-center gap-2 hover:bg-[#D97706] transition-colors duration-200 disabled:opacity-70 disabled:cursor-not-allowed shadow-md shadow-[#F59E0B]/20"
+          className="w-full py-3 rounded-xl bg-[#F59E0B] text-[#0B1F3A] font-semibold text-sm flex items-center justify-center gap-2 hover:bg-[#D97706] hover:shadow-lg hover:shadow-[#F59E0B]/30 transition-all duration-200 disabled:opacity-70 disabled:cursor-not-allowed shadow-md shadow-[#F59E0B]/20"
           style={{ fontFamily: 'var(--font-poppins)' }}
         >
           {loading ? (

@@ -8,7 +8,11 @@ export const metadata = {
 
 export default function SignupPage() {
   return (
-    <AuthLayout pageKey="signup">
+    <AuthLayout 
+      pageKey="signup"
+      panelHeading="Find Your Perfect University"
+      panelSubtext="Join thousands of students discovering their future."
+    >
       <SignupForm />
     </AuthLayout>
   )

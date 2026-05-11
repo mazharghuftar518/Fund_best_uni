@@ -8,7 +8,11 @@ export const metadata = {
 
 export default function LoginPage() {
   return (
-    <AuthLayout pageKey="login">
+    <AuthLayout 
+      pageKey="login" 
+      panelHeading="Welcome Back to UniPath"
+      panelSubtext="Your university journey continues here."
+    >
       <LoginForm />
     </AuthLayout>
   )
