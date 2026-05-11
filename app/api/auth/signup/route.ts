@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { randomUUID } from 'crypto'
 import bcrypt from 'bcryptjs'
 import { createAdminClient } from '@/lib/db'
 
@@ -85,10 +86,14 @@ export async function POST(req: NextRequest) {
     // Default to role_id 3 (Student) if not found
     const role_id = roleData?.role_id ?? 3
 
+    // Generate UUID for new user
+    const userId = randomUUID()
+
     // Insert user
     const { data: newUser, error: insertError } = await db
       .from('users')
       .insert({
+        id: userId,
         full_name: full_name.trim(),
         username: username.trim(),
         email: email.toLowerCase().trim(),
@@ -107,7 +112,10 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (insertError) {
-      console.error('[Signup] DB insert error:', insertError)
+      console.error('[Signup] DB insert error:', JSON.stringify(insertError, null, 2))
+      console.error('[Signup] Insert error code:', insertError.code)
+      console.error('[Signup] Insert error message:', insertError.message)
+      console.error('[Signup] Insert error details:', insertError.details)
       
       // Check for specific constraint violations
       if (insertError.code === '23505') {
