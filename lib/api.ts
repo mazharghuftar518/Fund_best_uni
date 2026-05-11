@@ -249,3 +249,122 @@ export async function fetchCurrentUser(): Promise<CurrentUser | null> {
 export async function logout() {
   await apiFetch('/api/auth/logout', { method: 'POST' })
 }
+
+// ─── Admission Predictor ──────────────────────────────────────────────────────
+
+export interface UniversityFormula {
+  formula_id: number
+  uni_id: number
+  dept_name: string
+  matric_weight: number
+  inter_weight: number
+  entry_test_weight: number
+  olevel_weight: number | null
+  alevel_weight: number | null
+}
+
+export interface PredictorPayload {
+  qualification_type: 'matric_fsc' | 'olevel_alevel'
+  matric_obtained?: number
+  matric_total?: number
+  inter_obtained?: number
+  inter_total?: number
+  olevel_obtained?: number
+  olevel_total?: number
+  alevel_obtained?: number
+  alevel_total?: number
+  entry_test_obtained?: number
+  entry_test_total?: number
+  university_id: number
+  department: string
+}
+
+export interface PredictorResult {
+  aggregate: number
+  formula_used: UniversityFormula
+  historical_cutoffs: { year: number; cutoff: number }[]
+  prediction: 'high' | 'medium' | 'low'
+  message: string
+}
+
+export async function getFormulas(uni_id: number): Promise<UniversityFormula[]> {
+  return apiFetch<UniversityFormula[]>(`/api/aggregate-formulas?uni_id=${uni_id}`)
+}
+
+export async function predictAdmission(payload: PredictorPayload): Promise<PredictorResult> {
+  // Calculate aggregate based on formula
+  const formulas = await getFormulas(payload.university_id)
+  const formula = formulas.find(f => f.dept_name === payload.department)
+  
+  if (!formula) {
+    throw new Error('No formula found for this department')
+  }
+
+  let aggregate = 0
+  
+  if (payload.qualification_type === 'matric_fsc') {
+    const matricPercent = payload.matric_obtained && payload.matric_total 
+      ? (payload.matric_obtained / payload.matric_total) * 100 : 0
+    const interPercent = payload.inter_obtained && payload.inter_total 
+      ? (payload.inter_obtained / payload.inter_total) * 100 : 0
+    const entryPercent = payload.entry_test_obtained && payload.entry_test_total 
+      ? (payload.entry_test_obtained / payload.entry_test_total) * 100 : 0
+    
+    aggregate = (matricPercent * formula.matric_weight / 100) +
+                (interPercent * formula.inter_weight / 100) +
+                (entryPercent * formula.entry_test_weight / 100)
+  } else {
+    const olevelPercent = payload.olevel_obtained && payload.olevel_total 
+      ? (payload.olevel_obtained / payload.olevel_total) * 100 : 0
+    const alevelPercent = payload.alevel_obtained && payload.alevel_total 
+      ? (payload.alevel_obtained / payload.alevel_total) * 100 : 0
+    const entryPercent = payload.entry_test_obtained && payload.entry_test_total 
+      ? (payload.entry_test_obtained / payload.entry_test_total) * 100 : 0
+    
+    aggregate = (olevelPercent * (formula.olevel_weight ?? 0) / 100) +
+                (alevelPercent * (formula.alevel_weight ?? 0) / 100) +
+                (entryPercent * formula.entry_test_weight / 100)
+  }
+
+  // Fetch historical merit data
+  const meritData = await getMeritLists({ 
+    uni_id: String(payload.university_id),
+    limit: 5 
+  })
+  
+  const historicalCutoffs = meritData.data
+    .filter(m => m.departments?.dept_name === payload.department)
+    .map(m => ({ year: m.merit_year, cutoff: m.merit_closing_score ?? 0 }))
+    .sort((a, b) => b.year - a.year)
+
+  const avgCutoff = historicalCutoffs.length > 0 
+    ? historicalCutoffs.reduce((acc, c) => acc + c.cutoff, 0) / historicalCutoffs.length 
+    : 70
+
+  let prediction: 'high' | 'medium' | 'low'
+  let message: string
+
+  if (aggregate >= avgCutoff + 5) {
+    prediction = 'high'
+    message = 'Excellent chances! Your aggregate is well above the historical cutoff.'
+  } else if (aggregate >= avgCutoff - 5) {
+    prediction = 'medium'
+    message = 'Good chances! Your aggregate is close to the historical cutoff.'
+  } else {
+    prediction = 'low'
+    message = 'Consider improving your scores or exploring other options.'
+  }
+
+  return {
+    aggregate: Math.round(aggregate * 100) / 100,
+    formula_used: formula,
+    historical_cutoffs: historicalCutoffs,
+    prediction,
+    message,
+  }
+}
+
+export async function getUniversitiesForPredictor(): Promise<{ uni_id: number; uni_name: string }[]> {
+  const data = await getUniversities({ limit: 100 })
+  return data.data.map(u => ({ uni_id: u.uni_id, uni_name: u.uni_name }))
+}

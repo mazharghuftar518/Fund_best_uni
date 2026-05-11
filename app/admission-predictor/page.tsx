@@ -243,8 +243,7 @@ export default function AdmissionPredictorPage() {
   useEffect(() => {
     if (!form.university_id) { setFormulas([]); return }
     setLoadingFormulas(true)
-    getFormulas(form.university_id).then(setFormulas).catch(() => setFormulas([]).finally(() => setLoadingFormulas(false)))
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    getFormulas(form.university_id).then(setFormulas).catch(() => setFormulas([])).finally(() => setLoadingFormulas(false))
   }, [form.university_id])
 
   const set = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: value }))

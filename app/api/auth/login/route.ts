@@ -141,8 +141,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function logAttempt(db: any, email: string, ip: string, success: boolean, reason: string | null) {
+async function logAttempt(db: ReturnType<typeof createAdminClient>, email: string, ip: string, success: boolean, reason: string | null) {
   await db.from('login_attempts').insert({
     email: email.toLowerCase().trim(),
     ip_address: ip,
